@@ -79,7 +79,7 @@ set_property -dict { PACKAGE_PIN G2   IOSTANDARD LVCMOS33 } [get_ports {mic_clk}
 set_property -dict { PACKAGE_PIN H1   IOSTANDARD LVCMOS33 } [get_ports {data[8]}];#Sch name = JA7
 set_property -dict { PACKAGE_PIN K2   IOSTANDARD LVCMOS33 } [get_ports {data[10]}];#Sch name = JA8
 set_property -dict { PACKAGE_PIN H2   IOSTANDARD LVCMOS33 } [get_ports {data[12]}];#Sch name = JA9
-set_property -dict { PACKAGE_PIN G3   IOSTANDARD LVCMOS33 } [get_ports {data[14]]}];#Sch name = JA10
+set_property -dict { PACKAGE_PIN G3   IOSTANDARD LVCMOS33 } [get_ports {data[14]}];#Sch name = JA10
 
 ##Pmod Header JB
 #set_property -dict { PACKAGE_PIN A14   IOSTANDARD LVCMOS33 } [get_ports {JB[0]}];#Sch name = JB1

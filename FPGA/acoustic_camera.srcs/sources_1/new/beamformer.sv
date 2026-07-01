@@ -31,7 +31,6 @@ module beamformer #(
     input logic signed [17:0] I [MIC_COUNT-1:0],
     input logic               input_ready
 );
-localparam CORDIC_DELAY = 22;
 
 //even MK = vdd mic
 //odd  MK = gnd mic
@@ -101,16 +100,14 @@ localparam signed [13:0] Y [MIC_COUNT-1:0] = '{
     -14'sd1739  // MK25
 };
 
-
-logic [$clog2(CORDIC_DELAY)-1:0] waiting_ctr;
 logic [9:0] pixel_ctr;
 logic [$clog2(MIC_COUNT)-1:0] mic_ctr;
 logic signed [38:0] pixel_buffer_R, pixel_buffer_I;
-logic signed [17:0] steering_cycles;
-logic [41:0] cordic_out;
+logic signed [23:0] s_axis_phase_tdata;
+logic [47:0] m_axis_dout_tdata;
 logic signed [17:0] sin;
 logic signed [17:0] cos;
-logic phase_valid, cordic_valid;
+logic s_axis_phase_tvalid, m_axis_dout_tvalid, s_axis_phase_tready;
 
 logic signed [38:0] RC, IC, RS, IS;
 logic signed [17:0] UX, VY;
@@ -120,9 +117,9 @@ logic signed [5:0] U, V; //FIX6_5
 logic signed [5:0] U_next, V_next; //FIX6_5
 logic [9:0] next_pixel_ctr;
 logic signed [17:0] re,img;
-logic [34:0] power;
+logic [34:0] power, p;
 
-enum logic [2:0] {IDLE, CALCULATING1, CALCULATING2, WAITING, WRITING1, WRITING2} state;
+enum logic [2:0] {IDLE, CALCULATING, WAITING1, WAITING2, WRITING1, WRITING2} state;
 
 //scaled_radians (half turns)
 //in  = FIXED18_15
@@ -130,20 +127,20 @@ enum logic [2:0] {IDLE, CALCULATING1, CALCULATING2, WAITING, WRITING1, WRITING2}
 //takes 22 cycles
 cordic_0 cordic_inst (
     .aclk       (clk),
-    .s_axis_phase_tdata   (steering_cycles),
-    .m_axis_dout_tdata    (cordic_out),
-    .s_axis_phase_tvalid (phase_valid),
-    .m_axis_dout_tvalid (cordic_valid)
+    .s_axis_phase_tdata   (s_axis_phase_tdata),
+    .m_axis_dout_tdata    (m_axis_dout_tdata),
+    .s_axis_phase_tvalid (s_axis_phase_tvalid),
+    .s_axis_phase_tready (s_axis_phase_tready),
+    .m_axis_dout_tvalid (m_axis_dout_tvalid)
 );
 
 
 always_ff @(posedge clk or negedge n_reset) begin
     if (!n_reset) begin
-        waiting_ctr <= 0;
         pixel_ctr <= 0;
         mic_ctr <= 0;
         state <= IDLE;
-        phase_valid <= 0;
+        s_axis_phase_tvalid <= 0;
         pixel_buffer_R <= 0;
         pixel_buffer_I <= 0;
     end
@@ -151,55 +148,55 @@ always_ff @(posedge clk or negedge n_reset) begin
         case(state)
         IDLE: begin
             if(input_ready) begin
-                phase_valid <= 1;
-                state <= WAITING;
+                state <= WAITING1;
+                s_axis_phase_tvalid <= 1;
             end
             else begin
-                phase_valid <= 0;
                 state <= IDLE;
-                
+                s_axis_phase_tvalid <= 0;
             end
             UX <= U*X[0];
             VY <= V*Y[0];
-            steering_cycles <= (UX + VY + 14'sd328); //FIX18_15
         end
-        WAITING: begin
-            if(cordic_valid) begin
-                phase_valid <= 0;
-                state <= CALCULATING1;
+        WAITING1: begin
+            if(s_axis_phase_tready) begin
+                s_axis_phase_tvalid <= 0;
+                state <= WAITING2;
+            end
+        end
+        WAITING2: begin
+            if(m_axis_dout_tvalid) begin
+                state <= CALCULATING;
+                RC <= R[mic_ctr]*cos;
+                IC <= I[mic_ctr]*cos;
+                RS <= R[mic_ctr]*sin;
+                IS <= I[mic_ctr]*sin;
+
+                if(mic_ctr == MIC_COUNT - 1) begin
+                    //next pixel's U/V
+                    UX <= U_next*X[0];
+                    VY <= V_next*Y[0];
+                end
+                else begin
+                    UX <= U*X[mic_ctr + 1];
+                    VY <= V*Y[mic_ctr + 1];
+                end
             end
             else begin
-                phase_valid <= 0;
-                state <= WAITING;
+                state <= WAITING2;
             end
         end
-        CALCULATING1: begin
-            state <= CALCULATING2;
-            RC <= R[mic_ctr]*cos;
-            IC <= I[mic_ctr]*cos;
-            RS <= R[mic_ctr]*sin;
-            IS <= I[mic_ctr]*sin;
-            if(mic_ctr == MIC_COUNT - 1) begin
-                //next pixel's U/V
-                UX <= U_next*X[0];
-                VY <= V_next*Y[0];
-            end
-            else begin
-                UX <= U*X[mic_ctr + 1];
-                VY <= V*Y[mic_ctr + 1];
-            end
-        end
-        CALCULATING2: begin
+        CALCULATING: begin
             if(mic_ctr == MIC_COUNT-1) begin
                 mic_ctr <= 0;
                 state <= WRITING1;
+                s_axis_phase_tvalid <= 0;
             end
             else begin
                 mic_ctr <= mic_ctr + 1;
-                state <= WAITING;
+                state <= WAITING1;
+                s_axis_phase_tvalid <= 1;
             end
-            steering_cycles <= mic_ctr[0]? (UX + VY + 14'sd328) : (UX + VY); //FIX18_15
-            phase_valid <= 1;
             //to compensate for the fact that odd mics sample 250ns later
             pixel_buffer_R <= pixel_buffer_R + RC - IS;
             pixel_buffer_I <= pixel_buffer_I + IC + RS;
@@ -210,18 +207,19 @@ always_ff @(posedge clk or negedge n_reset) begin
             pixel_buffer_R <= 0;
             pixel_buffer_I <= 0;
             state <= WRITING2;
-            phase_valid <= 0;
+            s_axis_phase_tvalid <= 0;
         end
         WRITING2: begin
-            framebuffer[pixel_ctr] <= power[32:29];
-            phase_valid <= 0;
+            framebuffer[pixel_ctr] <= p;
             if(pixel_ctr == 1023) begin
                     pixel_ctr <= 0;
                     state <= IDLE;
+                    s_axis_phase_tvalid <= 0;
             end
             else begin
                     pixel_ctr <= pixel_ctr +1;
-                    state <= WAITING;
+                    state <= WAITING1;
+                    s_axis_phase_tvalid <= 1;
             end
         end
         endcase
@@ -237,14 +235,16 @@ always_comb begin
     U_next = {next_pixel_ctr[4:0], 1'b0} - 31; //FIX6_5
     V_next = {next_pixel_ctr[9:5], 1'b0} - 31; //FIX6_5
 
+    s_axis_phase_tdata = mic_ctr[0]? (UX + VY) : (UX + VY + 14'sd328); //FIX18_15
 
-    sin = cordic_out[41:24]; //FIX18_16
-    cos = cordic_out[17:0]; //FIX18_16
+    sin = m_axis_dout_tdata[41:24]; //FIX18_16
+    cos = m_axis_dout_tdata[17:0]; //FIX18_16
 
     re = pixel_buffer_R >>> 21;
     img = pixel_buffer_I >>> 21;
 
     power = re_sq + img_sq;
+    p = power >>> 29;
 end
 
 

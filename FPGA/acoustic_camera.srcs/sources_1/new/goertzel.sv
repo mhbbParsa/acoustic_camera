@@ -41,11 +41,13 @@ module goertzel #(
     logic [$clog2(N+1)-1:0] ctr;
     logic [$clog2(MIC_COUNT)-1:0] mic_ctr;
 
-    assign cos_s2_product = s_2[mic_ctr] * COS_w;
-    assign sin_s2_product = s_2[mic_ctr] * SIN_w;
+    logic [31:0] re, img;
+    logic signed [63:0] c1, c2, s2;
+    logic signed [31:0] s1_fetch, s2_fetch;
 
 
-    enum logic [1:0] {waiting, active, active2} state;
+
+    enum logic [2:0] {waiting, active1, active2, shifting, writing1, writing2, writing3} state;
 
     always_ff @(posedge clk or negedge n_reset) begin
         if (!n_reset) begin
@@ -54,6 +56,10 @@ module goertzel #(
             state <= waiting;
             goertzel_valid <= 0;
             cos_s1_product <= '0;
+            cos_s2_product <= '0;
+            sin_s2_product <= '0;
+            s1_fetch <= '0;
+            s2_fetch <= '0;
             for(int i = 0; i < MIC_COUNT; i++) begin
                 s_1[i] <= '0;
                 s_2[i] <= '0;
@@ -65,37 +71,58 @@ module goertzel #(
                     goertzel_valid <= 0;
                     mic_ctr <= 0;
                     if(enable_goertzel)
-                        state <= active;
+                        state <= active1;
                 end
-                active: begin
-                    if (ctr == N-1) begin
-                            R[mic_ctr] <= re[25:8];
-                            I[mic_ctr] <= img[25:8];
-                            s_2[mic_ctr] <= 0;
-                            s_1[mic_ctr] <= 0;
-                            if(mic_ctr == MIC_COUNT-1) begin
-                                goertzel_valid <= 1;
-                                ctr <= 0;
-                                state <= waiting;
-                            end
-                            else
-                                mic_ctr <= mic_ctr + 1;
-                    end
-                    else begin
-                        cos_s1_product <= s_1[mic_ctr] * COS_w;
-                        state <= active2;
-                    end
+                active1: begin
+                    s1_fetch <= s_1[mic_ctr];
+                    state <= active2;
                 end
                 active2: begin
+                    cos_s1_product <= s1_fetch * COS_w;
+                    state <= shifting;
+                end
+                shifting: begin
                     s_2[mic_ctr] <= s_1[mic_ctr];
-                    s_1[mic_ctr] <= audio[mic_ctr] + (cos_s1_product >>> 30) - s_2[mic_ctr];
+                    s_1[mic_ctr] <= audio[mic_ctr] + c1 - s_2[mic_ctr];
                     if(mic_ctr == MIC_COUNT-1) begin
-                        ctr <= ctr + 1;
-                        state <= waiting;
+                        mic_ctr <= 0;
+                        if(ctr == N-1) begin
+                            ctr <= 0;
+                            state <= writing1;
+                        end
+                        else begin
+                            ctr <= ctr + 1;
+                            state <= waiting;
+                        end
                     end
                     else begin
                         mic_ctr <= mic_ctr + 1;
-                        state <= active;
+                        state <= active1;
+                    end
+                end
+                writing1: begin
+                    s2_fetch <= s_2[mic_ctr];
+                    state <= writing2;
+                end
+                writing2: begin
+                    cos_s2_product <= s2_fetch * COS_w;
+                    sin_s2_product <= s2_fetch * SIN_w;
+                    state <= writing3;
+                end
+                writing3: begin
+                    R[mic_ctr] <= re;
+                    I[mic_ctr] <= img;
+                    s_1[mic_ctr] <= '0;
+                    s_2[mic_ctr] <= '0;
+                    if(mic_ctr == MIC_COUNT-1) begin
+                        goertzel_valid <= 1;
+                        state <= waiting;
+                        mic_ctr <= 0;
+                    end
+                    else begin
+                        goertzel_valid <= 0;
+                        mic_ctr <= mic_ctr + 1;
+                        state <= writing1;
                     end
                 end
             endcase
@@ -103,10 +130,14 @@ module goertzel #(
     end
 
 
-logic [31:0] re, img;
+
 always_comb begin
-    re = (s_1[mic_ctr] - (cos_s2_product >>> 31));
-    img = (sin_s2_product >>> 31);
+    c1 = (cos_s1_product >>> 30);
+    c2 = (cos_s2_product >>> 31);
+    s2 = (sin_s2_product >>> 31);
+
+    re = (s_1[mic_ctr] - c2) >>> 8;
+    img = s2 >>> 8;
 end
 
 endmodule
