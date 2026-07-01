@@ -6,8 +6,17 @@ A real-time acoustic camera built around a 30-element MEMS microphone array and 
 
 ## How it works
 
-```
-30x PDM mics --> CIC decimation --> Goertzel (single-bin DFT) --> CORDIC beamformer --> 32x32 framebuffer --> VGA
+```mermaid
+flowchart TD
+    MIC["30x SPH0641LU4H\nPDM MEMS mics"] -->|"30x 1-bit PDM"| MM["master_mic.sv\nclock gen + time-multiplexed capture"]
+    MM -->|"mic_clk"| MIC
+    MM -->|"30x PDM"| CIC["CIC.sv\n4th-order CIC decimation"]
+    CIC -->|"30x 18-bit PCM"| GZ["goertzel.sv\nsingle-bin DFT @ target freq"]
+    GZ -->|"30x (I,Q) phasors"| BF["beamformer.sv\nCORDIC delay-and-sum"]
+    CORDIC["cordic_0\nVivado CORDIC IP\n(phase -> sin/cos)"] --> BF
+    BF -->|"1024 steering dirs\n32x32 grid"| FB["framebuffer\n32x32 x 4bpp"]
+    FB --> VGA["vga_controller.sv"]
+    VGA --> MON["VGA monitor"]
 ```
 
 1. **Acquisition** (`master_mic.sv`) — the 30 microphones are wired as 15 pairs sharing 15 physical pins; even mics are latched on one clock phase, odd mics on the other, so all 30 PDM streams are captured with one `mic_clk`.
