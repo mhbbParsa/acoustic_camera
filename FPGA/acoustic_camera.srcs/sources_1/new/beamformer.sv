@@ -24,12 +24,13 @@ module beamformer #(
     parameter MIC_COUNT = 30
 )
 (
-    output logic [3:0] framebuffer [1023:0],
+    output logic [5:0] framebuffer [1023:0],
     input logic               clk,
     input logic               n_reset,
     input logic signed [17:0] R [MIC_COUNT-1:0],
     input logic signed [17:0] I [MIC_COUNT-1:0],
-    input logic               input_ready
+    input logic               input_ready,
+    input logic         [4:0] gain
 );
 
 //even MK = vdd mic
@@ -117,7 +118,7 @@ logic signed [5:0] U, V; //FIX6_5
 logic signed [5:0] U_next, V_next; //FIX6_5
 logic [9:0] next_pixel_ctr;
 logic signed [17:0] re,img;
-logic [34:0] power, p;
+logic [34:0] power;
 
 enum logic [2:0] {IDLE, CALCULATING, WAITING1, WAITING2, WRITING1, WRITING2} state;
 
@@ -210,7 +211,7 @@ always_ff @(posedge clk or negedge n_reset) begin
             s_axis_phase_tvalid <= 0;
         end
         WRITING2: begin
-            framebuffer[pixel_ctr] <= p;
+            framebuffer[pixel_ctr] <= (power >>> (31 - gain));
             if(pixel_ctr == 1023) begin
                     pixel_ctr <= 0;
                     state <= IDLE;
@@ -244,7 +245,6 @@ always_comb begin
     img = pixel_buffer_I >>> 21;
 
     power = re_sq + img_sq;
-    p = power >>> 29;
 end
 
 

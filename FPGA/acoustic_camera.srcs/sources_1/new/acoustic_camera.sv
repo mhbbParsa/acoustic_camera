@@ -36,13 +36,14 @@ module acoustic_camera #(
     output logic       vsync,
     input  logic       data [14:0],
     input  logic       clk,
-    input  logic       n_reset
+    input  logic       n_reset,
+    input  logic [4:0] gain
 );
 
 logic signed [17:0] audio [MIC_COUNT-1:0];
 logic signed [17:0] R [MIC_COUNT-1:0];
 logic signed [17:0] I [MIC_COUNT-1:0];
-logic [3:0] framebuffer [1023:0];
+logic [5:0] framebuffer [1023:0];
 
 
 logic goertzel_valid;
@@ -88,7 +89,8 @@ beamf (
     .n_reset(n_reset),
     .R(R),
     .I(I),
-    .input_ready(goertzel_valid)
+    .input_ready(goertzel_valid),
+    .gain(gain)
 );
 
 vga_controller

@@ -28,12 +28,18 @@ module vga_controller(
     output logic vsync,
     input logic  clk,
     input logic  n_reset,
-    input logic [3:0] framebuffer [1023:0]
+    input logic [5:0] framebuffer [1023:0]
     );
 
 logic [9:0] h_cnt; // 0–799
 logic [9:0] v_cnt; // 0–524
+logic [3:0] r, g, b;
+
 logic display;
+
+logic [3:0] v_image_ctr, h_image_ctr;
+logic [9:0] image_pixel_ctr;
+
 
 logic [1:0] clk_ctr;
 logic clock_enable;
@@ -98,16 +104,33 @@ always_ff @(posedge clk or negedge n_reset) begin
     end
 end
 
-logic [3:0] v_image_ctr, h_image_ctr;
-logic [9:0] image_pixel_ctr;
+
+
 
 
 always_comb begin
-    red = display? framebuffer[image_pixel_ctr] : 4'b0;
-    blue = display? framebuffer[image_pixel_ctr] : 4'b0;
-    green = display? framebuffer[image_pixel_ctr] : 4'b0;
+    if (framebuffer[image_pixel_ctr] < 16) begin        // black to blue
+        r = 0;
+        g = 0;
+        b = framebuffer[image_pixel_ctr];
+    end else if (framebuffer[image_pixel_ctr] < 32) begin  // blue to cyan
+        r = 0;
+        g = framebuffer[image_pixel_ctr] - 16;
+        b = 4'hF;
+    end else if (framebuffer[image_pixel_ctr] < 48) begin  // cyan to yellow
+        r = framebuffer[image_pixel_ctr] - 32;
+        g = 4'hF;
+        b = 47 - framebuffer[image_pixel_ctr];
+    end else begin              // yellow to red
+        r = 4'hF;
+        g = 63 - framebuffer[image_pixel_ctr];
+        b = 0;
+    end
 end
 
+assign red = display? r : 4'b0;
+assign blue = display? b : 4'b0;
+assign green = display? g : 4'b0; 
 
 
 assign hsync = ~(h_cnt >= 656 && h_cnt < 752);

@@ -28,7 +28,7 @@ module acoustic_camera_tb;
     localparam int  TEST_FREQ         = 20000;
 
     logic clk = 0, n_reset = 0;
-
+    logic [4:0] gain = 5'd4;
     logic [13:0] temp_ctr;
     logic signal[14:0];
     always_ff @(posedge clk or negedge n_reset) begin
@@ -60,7 +60,8 @@ module acoustic_camera_tb;
     ) dut (
         .clk (clk),
         .n_reset (n_reset),
-        .data (signal)
+        .data (signal),
+        .gain(gain)
     );
     integer fd, p;
 

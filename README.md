@@ -65,7 +65,7 @@ Mic positions follow a Fermat/Vogel spiral ("sunflower" pattern) so steering del
 |---|---|
 | ![single source](pics/single_source.png) | ![double source](pics/double_source.png) |
 
-![20 kHz simulation result](pics/beamform_20000Hz.png)
+![20 kHz simulation result](pics/beamform.png)
 
 *32×32 Vivado simulation output at a 20 kHz target frequency, upscaled to 512×512 (nearest-neighbor) for legibility.*
 
