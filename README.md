@@ -1,8 +1,10 @@
 # Acoustic Camera
 
+https://github.com/user-attachments/assets/35040632-333c-4387-a5bf-bf2f547ff368
+
 A real-time acoustic camera built around a 30-element MEMS microphone array and an FPGA beamformer. The FPGA extracts a single target frequency from every microphone, steers a 32×32 grid of look directions with a CORDIC-based phase rotator, and streams the resulting sound-power map out over UART to a Python viewer — either a plain live heatmap, or overlaid on a webcam feed. A physical switch flips the beamformer between a wide 180° field of view and a zoomed-in 60° view, another five switches set display gain (read back on the board's own 7-segment display), and holding spacebar in the camera overlay re-centers the heatmap on whatever's currently loudest.
 
-https://github.com/user-attachments/assets/35040632-333c-4387-a5bf-bf2f547ff368
+Curiosity about phased array radar antennas and electronic beam steering led me to make this more accessible alternative, that replaces the difficult, expensive RF design with acoustic equivalents that are cheap to prototype and safe to probe by hand. The underlying math is identical. Only the wavelength and the hardware changed.
 
 | | |
 |---|---|
