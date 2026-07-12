@@ -6,8 +6,8 @@ vals = np.loadtxt(
     dtype=np.uint8
 ).reshape(32, 32)
 
-# Unsigned 6-bit values, mapped to the same black -> blue -> cyan -> yellow -> red
-# heatmap used by vga_controller.sv
+#black -> blue -> cyan -> yellow -> red
+#heatmap used by vga_controller.sv
 MAX_6BIT = (1 << 6) - 1  # 63
 MAX_4BIT = (1 << 4) - 1  # 15
 
@@ -39,11 +39,7 @@ rgb = (rgb * 255 // MAX_4BIT).astype(np.uint8)
 
 img = Image.fromarray(rgb, mode="RGB")
 
-# Upscale using nearest-neighbor
-scale = 16  # e.g. 32x32 -> 512x512
-upscaled = img.resize(
-    (img.width * scale, img.height * scale),
-    Image.Resampling.NEAREST
-)
+scale = 16  #32x32 -> 512x512
+upscaled = img.resize((img.width * scale, img.height * scale), Image.Resampling.NEAREST)
 
 upscaled.save("beamform.png")

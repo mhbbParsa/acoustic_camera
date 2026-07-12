@@ -26,9 +26,10 @@ module vga_controller(
     output logic [3:0] blue,
     output logic hsync,
     output logic vsync,
+    output logic [9:0]  rd_addr,
+    input  logic [15:0] rd_data,
     input logic  clk,
-    input logic  n_reset,
-    input logic [5:0] framebuffer [1023:0]
+    input logic  rst
     );
 
 logic [9:0] h_cnt; // 0–799
@@ -43,8 +44,8 @@ logic [9:0] image_pixel_ctr;
 
 logic [1:0] clk_ctr;
 logic clock_enable;
-always_ff @(posedge clk or negedge n_reset) begin
-    if(!n_reset) begin
+always_ff @(posedge clk or posedge rst) begin
+    if(rst) begin
         clk_ctr <= 0;
         clock_enable <= 0;
     end
@@ -58,8 +59,8 @@ always_ff @(posedge clk or negedge n_reset) begin
     end
 end
 
-always_ff @(posedge clk or negedge n_reset) begin
-    if(!n_reset) begin
+always_ff @(posedge clk or posedge rst) begin
+    if(rst) begin
         h_cnt <= 0;
         v_cnt <= 0;
         v_image_ctr <= 0;
@@ -109,21 +110,21 @@ end
 
 
 always_comb begin
-    if (framebuffer[image_pixel_ctr] < 16) begin        // black to blue
+    if (rd_data[5:0] < 16) begin        // black to blue
         r = 0;
         g = 0;
-        b = framebuffer[image_pixel_ctr];
-    end else if (framebuffer[image_pixel_ctr] < 32) begin  // blue to cyan
+        b = rd_data[5:0];
+    end else if (rd_data[5:0] < 32) begin  // blue to cyan
         r = 0;
-        g = framebuffer[image_pixel_ctr] - 16;
+        g = rd_data[5:0] - 16;
         b = 4'hF;
-    end else if (framebuffer[image_pixel_ctr] < 48) begin  // cyan to yellow
-        r = framebuffer[image_pixel_ctr] - 32;
+    end else if (rd_data[5:0] < 48) begin  // cyan to yellow
+        r = rd_data[5:0] - 32;
         g = 4'hF;
-        b = 47 - framebuffer[image_pixel_ctr];
+        b = 47 - rd_data[5:0];
     end else begin              // yellow to red
         r = 4'hF;
-        g = 63 - framebuffer[image_pixel_ctr];
+        g = 63 - rd_data[5:0];
         b = 0;
     end
 end
@@ -137,5 +138,6 @@ assign hsync = ~(h_cnt >= 656 && h_cnt < 752);
 assign vsync = ~(v_cnt >= 490 && v_cnt < 492);
 assign display = (h_cnt > 79 && h_cnt < 560 && v_cnt < 480);
 
+assign rd_addr = image_pixel_ctr;
 
 endmodule

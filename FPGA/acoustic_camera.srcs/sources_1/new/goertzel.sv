@@ -31,7 +31,7 @@ module goertzel #(
     output logic               goertzel_valid,
     input  logic               clk,
     input  logic               enable_goertzel,
-    input  logic               n_reset,
+    input  logic               rst,
     input  logic signed [17:0] audio [MIC_COUNT-1:0]
 );
     
@@ -49,8 +49,8 @@ module goertzel #(
 
     enum logic [2:0] {waiting, active1, active2, shifting, writing1, writing2, writing3} state;
 
-    always_ff @(posedge clk or negedge n_reset) begin
-        if (!n_reset) begin
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
             ctr <= '0;
             mic_ctr <= '0;
             state <= waiting;

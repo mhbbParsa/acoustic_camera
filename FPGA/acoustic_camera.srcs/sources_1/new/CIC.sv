@@ -19,14 +19,14 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 module CIC #(
-    parameter DECIMATION_FACTOR = 64
+    parameter int DECIMATION_FACTOR = 64
 )(
     output logic signed [17:0] audio,
     input logic                PDM,
     input logic                enable,
     input logic                decimate,
     input logic                clk,
-    input logic                n_reset
+    input logic                rst
 );
 
 
@@ -34,8 +34,8 @@ logic signed [1+4*$clog2(DECIMATION_FACTOR):0] integrator1, integrator2, integra
 logic signed [1+4*$clog2(DECIMATION_FACTOR):0] comb1, comb2, comb3, comb4;
 logic signed [1+4*$clog2(DECIMATION_FACTOR):0] d1, d2, d3, d4;
 
-always_ff @(posedge clk, negedge n_reset) begin
-    if(!n_reset) begin
+always_ff @(posedge clk, posedge rst) begin
+    if(rst) begin
         integrator1 <= 0;
         integrator2 <= 0;
         integrator3 <= 0;

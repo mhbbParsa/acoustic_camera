@@ -21,20 +21,47 @@
 
 module beamformer_tb;
 
-parameter MIC_COUNT = 30;
+localparam int MIC_COUNT = 30;
+localparam logic ZOOM = 1; // 1 = 60deg, 0 = 180deg
 
-logic clk, n_reset, input_ready;
+
+logic clk, rst, input_ready;
 logic signed [17:0] R [MIC_COUNT-1:0];
 logic signed [17:0] I [MIC_COUNT-1:0];
-logic [3:0] framebuffer [1023:0];
+logic [4:0] gain = 5'd16;
 
-beamformer #(.MIC_COUNT(MIC_COUNT)) dut (
+logic [15:0] wr_data;
+logic [9:0]  wr_addr;
+logic        frame_ready;
+
+logic [15:0] rd_data;
+logic [9:0]  rd_addr;
+
+beamformer #(
+    .MIC_COUNT(MIC_COUNT),
+    .ZOOM(ZOOM)
+)
+dut (
     .clk(clk),
-    .n_reset(n_reset),
+    .rst(rst),
     .R(R),
     .I(I),
     .input_ready(input_ready),
-    .framebuffer(framebuffer)
+    .gain(gain),
+    .wr_data(wr_data),
+    .wr_addr(wr_addr),
+    .frame_ready(frame_ready)
+);
+
+framebuffer dut_fb (
+    .rd_data(rd_data),
+    .rd_addr(rd_addr),
+    .wr_addr(wr_addr),
+    .wr_data(wr_data),
+    .clk(clk),
+    .rst(rst),
+    .frame_ready(frame_ready),
+    .UART_busy(1'b0)
 );
 
 always #5 clk = ~clk;
@@ -42,7 +69,7 @@ integer fd, p;
 integer k;
 initial begin
     clk = 0;
-    n_reset = 0;
+    rst = 1;
     input_ready = 0;
     for (k = 0; k < MIC_COUNT; k++) begin
         R[k] = 18'h1ffff;
@@ -50,29 +77,30 @@ initial begin
     end
 
     @(posedge clk); #1;
-    n_reset = 1;
+    rst = 0;
 
     @(posedge clk); #1;
     input_ready = 1;
     @(posedge clk); #1;
     input_ready = 0;
 
-    // wait long enough for all 1024 pixels to complete
-    // each pixel: 1 WAITING(22) + 30*(1 CALCULATING + 22 WAITING) + 1 WRITING = 714 cycles
-    // 1024 pixels * 714 = ~731136 cycles
+  
     #8000000;
 
-    
+    repeat (4) @(posedge clk);
+
     fd = $fopen("framebuffer.txt", "w");
-    for (p = 0; p < 1024; p++) begin
-        $fwrite(fd, "%d\n", dut.framebuffer[p]);
+    for (p = 0; p <= 1023; p++) begin
+        rd_addr = p[9:0];
+        @(posedge clk); #1;
+        $fwrite(fd, "%d\n", rd_data[5:0]);
     end
     $fclose(fd);
 
     $finish;
 end
 
-// dump framebuffer when done
+
 initial begin
     $dumpfile("beamformer_tb.vcd");
     $dumpvars(0, beamformer_tb);

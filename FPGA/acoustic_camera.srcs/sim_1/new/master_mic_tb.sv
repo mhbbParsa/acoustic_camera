@@ -29,7 +29,7 @@ module master_mic_tb;
     logic audio_ready;
     logic data [MIC_COUNT/2-1:0];
     logic clk;
-    logic n_reset;
+    logic rst;
 
     master_mic #(
         .MIC_COUNT(MIC_COUNT),
@@ -40,7 +40,7 @@ module master_mic_tb;
         .audio_ready(audio_ready),
         .data(data),
         .clk(clk),
-        .n_reset(n_reset)
+        .rst(rst)
     );
     
 
@@ -49,11 +49,11 @@ module master_mic_tb;
     always #5 clk = ~clk;
 
     initial begin
-        n_reset = 0;
+        rst = 1;
         data[0] = 0;
 
         repeat (10) @(posedge clk);
-        n_reset = 1;
+        rst = 0;
 
         repeat (5000) begin
             #500000

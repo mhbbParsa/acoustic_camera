@@ -1,20 +1,20 @@
-N  = 30;  Rarr = 0.09;  ga = pi*(3-sqrt(5));
+N  = 30;  Rarr = 0.045;  ga = pi*(3-sqrt(5));
 i  = 0:N-1;
 r  = Rarr.*sqrt((i+0.5)/N);
 th = i.*ga;
 X  = r.*cos(th);  Y = r.*sin(th);  Z = zeros(1,N);
 
-n_of_sources = 1;
-s_x = [0, -1];
-s_y = [0, -1];
-s_z = [2, 2];
+n_of_sources = 2;
+s_x = [1, -1];
+s_y = [1, -1];
+s_z = [3.5, 3.5];
 intensity = [100 100];
 speed_of_sound = 343;
-frequency = 10000;
+frequency = 20000;
 lambda = speed_of_sound/frequency;
-
-u_vec   = linspace(-31/32, 31/32, 32);
-v_vec   = linspace(-31/32, 31/32, 32);
+u_max = 31/64;
+u_vec   = linspace(-u_max, u_max, 32);
+v_vec   = linspace(-u_max, u_max, 32);
 [U,V]   = meshgrid(u_vec, v_vec);
 visible = (U.^2 + V.^2) <= u_max.^2;
 %W       = sqrt(max(1 - U.^2 - V.^2, 0));

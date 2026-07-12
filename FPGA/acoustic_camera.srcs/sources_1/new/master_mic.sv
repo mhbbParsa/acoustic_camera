@@ -21,22 +21,23 @@
 
 
 module master_mic #(
-    parameter MIC_COUNT = 30,
-    parameter CLOCK_DIVIDER = 50,
-    parameter DECIMATION_FACTOR = 32
+    parameter int MIC_COUNT = 30,
+    parameter int MIC_HZ = 2_000_000,
+    parameter int CLK_HZ = 100_000_000,
+    parameter int DECIMATION_FACTOR = 32
 )(
     output logic signed [17:0] audio [MIC_COUNT-1:0],
     output logic               mic_clk,
     output logic               audio_ready,
     input  logic               data [MIC_COUNT/2-1:0],
     input  logic               clk,
-    input  logic               n_reset
+    input  logic               rst
 );
 
 logic enable1, enable2;
 logic decimate;
 logic [$clog2(DECIMATION_FACTOR)-1:0] decimation_ctr;
-logic [$clog2(CLOCK_DIVIDER)-1:0] divider_ctr;
+logic [$clog2(CLK_HZ/MIC_HZ)-1:0] divider_ctr;
 
 logic sync1[MIC_COUNT/2-1:0];
 logic sync2[MIC_COUNT/2-1:0];
@@ -53,7 +54,7 @@ generate
         .PDM    (sync2[i]),
         .enable  (enable1),
         .clk     (clk),
-        .n_reset (n_reset),
+        .rst (rst),
         .decimate (decimate)
         );
 
@@ -64,14 +65,14 @@ generate
         .PDM    (sync2[i]),
         .enable  (enable2),
         .clk     (clk),
-        .n_reset (n_reset),
+        .rst (rst),
         .decimate (decimate)
         );
     end : mic_pair
 endgenerate
 
-always_ff @(posedge clk, negedge n_reset) begin
-    if(!n_reset) begin
+always_ff @(posedge clk, posedge rst) begin
+    if(rst) begin
         for(int i=0; i<MIC_COUNT/2; i++) begin
             sync2[i] <= 0;
             sync1[i] <= 0;
@@ -87,19 +88,19 @@ end
 
 
 //even mics get sampled first
-always_ff @(posedge clk, negedge n_reset) begin
-    if(!n_reset) begin
+always_ff @(posedge clk, posedge rst) begin
+    if(rst) begin
         divider_ctr <= 0;
         decimation_ctr <= 0;
         audio_ready <= 0;
         mic_clk <= 0;
     end
-    else if(divider_ctr == (CLOCK_DIVIDER/2-1)) begin
+    else if(divider_ctr == (CLK_HZ/MIC_HZ/2-1)) begin
         mic_clk <= 1;
         divider_ctr <= divider_ctr + 1;
         audio_ready <= 0;
     end
-    else if(divider_ctr == (CLOCK_DIVIDER-1)) begin
+    else if(divider_ctr == (CLK_HZ/MIC_HZ-1)) begin
         mic_clk <= 0;
         divider_ctr <= 0;
 
@@ -118,8 +119,8 @@ always_ff @(posedge clk, negedge n_reset) begin
     end
 end
 
-assign enable1 = (divider_ctr == (CLOCK_DIVIDER/2-1));
-assign enable2 = (divider_ctr == (CLOCK_DIVIDER-1));
+assign enable1 = (divider_ctr == (CLK_HZ/MIC_HZ/2-1));
+assign enable2 = (divider_ctr == (CLK_HZ/MIC_HZ-1));
 assign decimate = (decimation_ctr == DECIMATION_FACTOR-1);
 
 endmodule

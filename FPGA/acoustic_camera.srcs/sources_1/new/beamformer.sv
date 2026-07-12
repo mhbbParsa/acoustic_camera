@@ -21,16 +21,19 @@
 
 
 module beamformer #(
-    parameter MIC_COUNT = 30
+    parameter int MIC_COUNT = 30
 )
 (
-    output logic [5:0] framebuffer [1023:0],
-    input logic               clk,
-    input logic               n_reset,
-    input logic signed [17:0] R [MIC_COUNT-1:0],
-    input logic signed [17:0] I [MIC_COUNT-1:0],
-    input logic               input_ready,
-    input logic         [4:0] gain
+    output logic        [15:0] wr_data,
+    output logic         [9:0] wr_addr,
+    output logic               frame_ready,
+    input  logic               clk,
+    input  logic               rst,
+    input  logic signed [17:0] R [MIC_COUNT-1:0],
+    input  logic signed [17:0] I [MIC_COUNT-1:0],
+    input  logic               input_ready,
+    input  logic         [4:0] gain,
+    input  logic               zoom// 1 = 60deg, 0 = 180deg
 );
 
 //even MK = vdd mic
@@ -114,8 +117,8 @@ logic signed [38:0] RC, IC, RS, IS;
 logic signed [17:0] UX, VY;
 logic signed [35:0] re_sq, img_sq;
 
-logic signed [5:0] U, V; //FIX6_5
-logic signed [5:0] U_next, V_next; //FIX6_5
+logic signed [5:0] U, V; //FIX7_6
+logic signed [5:0] U_next, V_next; //FIX7_6
 logic [9:0] next_pixel_ctr;
 logic signed [17:0] re,img;
 logic [34:0] power;
@@ -136,14 +139,15 @@ cordic_0 cordic_inst (
 );
 
 
-always_ff @(posedge clk or negedge n_reset) begin
-    if (!n_reset) begin
+always_ff @(posedge clk or posedge rst) begin
+    if (rst) begin
         pixel_ctr <= 0;
         mic_ctr <= 0;
         state <= IDLE;
         s_axis_phase_tvalid <= 0;
         pixel_buffer_R <= 0;
         pixel_buffer_I <= 0;
+        frame_ready <= 0;
     end
     else begin
         case(state)
@@ -156,8 +160,9 @@ always_ff @(posedge clk or negedge n_reset) begin
                 state <= IDLE;
                 s_axis_phase_tvalid <= 0;
             end
-            UX <= U*X[0];
-            VY <= V*Y[0];
+            UX <= U*(X[0] >>> zoom); // must match the WAITING2 shift below, or mic 0's first term
+            VY <= V*(Y[0] >>> zoom); // stays wrong for the rest of the frame whenever zoom=0
+            frame_ready <= 0;
         end
         WAITING1: begin
             if(s_axis_phase_tready) begin
@@ -175,12 +180,12 @@ always_ff @(posedge clk or negedge n_reset) begin
 
                 if(mic_ctr == MIC_COUNT - 1) begin
                     //next pixel's U/V
-                    UX <= U_next*X[0];
-                    VY <= V_next*Y[0];
+                    UX <= U_next*(X[0] >>> zoom);
+                    VY <= V_next*(Y[0] >>> zoom);
                 end
                 else begin
-                    UX <= U*X[mic_ctr + 1];
-                    VY <= V*Y[mic_ctr + 1];
+                    UX <= U*(X[mic_ctr + 1] >>> zoom);
+                    VY <= V*(Y[mic_ctr + 1] >>> zoom);
                 end
             end
             else begin
@@ -211,11 +216,13 @@ always_ff @(posedge clk or negedge n_reset) begin
             s_axis_phase_tvalid <= 0;
         end
         WRITING2: begin
-            framebuffer[pixel_ctr] <= (power >>> (31 - gain));
+            wr_data <= (power >>> (31 - gain));
+            wr_addr <= pixel_ctr; // capture together with wr_data, before pixel_ctr advances below
             if(pixel_ctr == 1023) begin
                     pixel_ctr <= 0;
                     state <= IDLE;
                     s_axis_phase_tvalid <= 0;
+                    frame_ready <= 1;
             end
             else begin
                     pixel_ctr <= pixel_ctr +1;
@@ -229,12 +236,12 @@ end
 
 
 always_comb begin
-    U = {pixel_ctr[4:0], 1'b0} - 31; //FIX6_5
-    V = {pixel_ctr[9:5], 1'b0} - 31; //FIX6_5
+    U = {pixel_ctr[4:0], 1'b0} - 31; //FIX7_6
+    V = 31 - {pixel_ctr[9:5], 1'b0}; //FIX7_6
 
     next_pixel_ctr = (pixel_ctr == 10'd1023) ? 10'd0 : pixel_ctr + 10'd1;
     U_next = {next_pixel_ctr[4:0], 1'b0} - 31; //FIX6_5
-    V_next = {next_pixel_ctr[9:5], 1'b0} - 31; //FIX6_5
+    V_next = 31 - {next_pixel_ctr[9:5], 1'b0}; //FIX6_5
 
     s_axis_phase_tdata = mic_ctr[0]? (UX + VY) : (UX + VY + 14'sd328); //FIX18_15
 
@@ -246,8 +253,6 @@ always_comb begin
 
     power = re_sq + img_sq;
 end
-
-
 
 
 
