@@ -4,6 +4,19 @@ A real-time acoustic camera built around a 30-element MEMS microphone array and 
 
 https://github.com/user-attachments/assets/35040632-333c-4387-a5bf-bf2f547ff368
 
+| | |
+|---|---|
+| Target frequency | 20 kHz (single-bin Goertzel) |
+| Array | 30 mics, Fermat/Vogel spiral, ~90 mm diameter (measured from PCB layout) |
+| Sample rates | 2 MHz PDM → 62.5 kHz decimated audio (2 MHz / 32) |
+| Field of view | 60° (zoomed) or 180° (wide), switch-selectable |
+| Angular resolution | ≈11° (rough λ/D estimate at 20 kHz, not a precise figure) |
+| Frame rate to host | ≈60 fps (Goertzel-gated, comfortably clears the 2 Mbaud UART link) |
+| FPGA | Xilinx Artix-7 `xc7a35tcpg236-1` (Digilent Basys3) |
+
+![FPGA and PCB, physical setup](pics/fpga_and_pcb_front_physical.jpg)
+*20 kHz source → 30-mic PCB → Pmod → Basys3 → USB → host PC live viewer.*
+
 ## How it works
 
 ```mermaid
@@ -28,9 +41,15 @@ flowchart TD
 5. **Readout** (`UART.sv`) — once a full 1024-pixel frame is ready, it's streamed out at 2 Mbaud (`0xAA 0x55` sync header, then each pixel as 16-bit little-endian) to a host PC.
 6. **On-board readout** (`digit_disp.sv` / `sevenseg.sv`) — the current gain value is continuously multiplexed onto the board's two-digit 7-segment display, so gain can be read without a host PC attached.
 
-A `vga_controller.sv` module also exists (reads the same framebuffer and drives standard VGA timing) but isn't currently wired into the top level, since the framebuffer only exposes a single read port and UART already owns it.
+`vga_controller.sv` is implemented and was tested driving a live monitor earlier in this project; it's currently unused because the framebuffer only exposes a single read port, which is now assigned to UART for host streaming — a design choice, not an unfinished module.
 
 Mic positions follow a Fermat/Vogel spiral ("sunflower" pattern) so steering delays are computed from fixed-point `(X, Y)` coordinates baked into `beamformer.sv` at synthesis time.
+
+## Design decisions
+
+- **Double buffering, not a single shared framebuffer.** `framebuffer.sv` ping-pongs between two block RAMs: the beamformer always writes into one while UART reads out the other, swapping only once a full frame is ready and UART has finished the previous one. This avoids ever streaming a half-written frame.
+- **2 Mbaud specifically.** `CLK_HZ / BAUD = 100,000,000 / 2,000,000 = 50` exactly — an integer UART bit-clock divisor, so there's no baud-rate rounding error accumulating over a frame.
+- **Retargeting the Goertzel frequency.** Changing `MIC_HZ` or `DECIMATION_FACTOR` changes the decimated audio sample rate, which shifts which physical frequency the fixed Goertzel coefficients (`COS_w`/`SIN_w`) pick out — this has been verified working down to 10 kHz. That alone does *not* rescale the beamformer's `(X, Y)` mic-position constants, though, which are baked in relative to a reference wavelength; retargeting further out requires regenerating a new coordinate set from `MATLAB/coordinates.m`.
 
 ## Live viewer (Python)
 
@@ -67,7 +86,7 @@ python3 camera_overlay.py
 | `framebuffer.sv` | Double-buffered (ping-pong) block-RAM frame store; the beamformer writes one buffer while UART reads out the other. |
 | `UART.sv` | Streams a completed frame out at 2 Mbaud once `frame_ready` pulses. |
 | `digit_disp.sv` / `sevenseg.sv` | Multiplexes the current gain value onto the board's 7-segment display. |
-| `vga_controller.sv` | Reads the framebuffer and drives standard VGA timing; present but not currently instantiated (see above). |
+| `vga_controller.sv` | Reads the framebuffer and drives standard VGA timing; implemented and tested, currently unused (see above). |
 | `cordic_0` | Vivado-generated CORDIC IP (phase → sin/cos), used by the beamformer. |
 
 ## On-board controls
@@ -77,6 +96,28 @@ python3 camera_overlay.py
 | `gain[4:0]` (5 switches) | Sets the right-shift applied to each pixel's accumulated power before storage — controls display brightness/sensitivity. Mirrored on the 7-segment display. |
 | `zoom` (switch) | 1 = 60° field of view (zoomed in), 0 = 180° field of view (wide). |
 | `rst` (button) | Active-low system reset. |
+
+## Pmod wiring
+
+The 30 PDM lines are time-multiplexed down to 15 physical pins (`data[0:14]`, one pair of mics per pin), split across two Basys3 headers — see `FPGA/acoustic_camera.srcs/constrs_1/new/acoustic_camera.xdc` for the exact pin-to-signal mapping and `PCB/` for which physical mic pair lands on each line:
+
+| Header | Signals |
+|---|---|
+| Pmod JA | `data[8:14]`, `mic_clk` |
+| Pmod JXADC | `data[0:7]` |
+
+## Resource utilization
+
+From `FPGA/acoustic_camera.runs/impl_1/` (Vivado 2025.2, `xc7a35tcpg236-1`, fully placed and routed):
+
+| Resource | Used | Available | Utilization |
+|---|---|---|---|
+| Slice LUTs | 7,441 | 20,800 | 35.8% |
+| Slice Registers | 11,510 | 41,600 | 27.7% |
+| Block RAM (RAMB18) | 2 | 100 | 2.0% |
+| DSP48E1 | 20 | 90 | 22.2% |
+
+Timing closes at 100 MHz (the system clock constraint) with +0.313 ns worst negative slack — all user-specified constraints met.
 
 ## Simulation
 
@@ -100,24 +141,27 @@ Three stages of validation, from the floating-point reference model down to the 
 | Single source | ![single source, matlab, 60deg](pics/single_source_matlab_60deg.png) | ![single source, matlab, 180deg](pics/single_source_matlab_180deg.png) |
 | Double source | ![double source, matlab, 60deg](pics/double_source_matlab_60deg.png) | ![double source, matlab, 180deg](pics/double_source_matlab_180deg.png) |
 
+Double-source scenes are two equal-level 20 kHz sources, ~30° apart. In the 180° views, the region outside the unit circle (u²+v² > 1) is non-physical — direction cosines beyond that boundary don't correspond to a real look angle, so ignore any energy shown in the corners.
+
 **2. Vivado (RTL simulation)** — confirms the fixed-point SystemVerilog implementation matches the floating-point reference above:
 
 | 60° FOV | 180° FOV |
 |---|---|
 | ![Vivado simulation, 60deg](pics/beamform_sim_60deg.png) | ![Vivado simulation, 180deg](pics/beamform_sim_180deg.png) |
 
-**3. Hardware (live capture)** — via `camera_overlay.py`, at 60° FOV:
+**3. Hardware (live capture)** — via `camera_overlay.py`, at 60° FOV, same two-equal-level-sources-~30°-apart setup as above:
 
 | Single source | Double source |
 |---|---|
-| ![single source, hardware result](pics/single_sourse_result_60_deg.png) | ![double source, hardware result](pics/double_sourse_result_60_deg.png) |
+| ![single source, hardware result](pics/single_source_result_60deg.png) | ![double source, hardware result](pics/double_source_result_60deg.png) |
 
 ## Hardware
 
-| | |
+| PCB front (model) | PCB back (model) |
 |---|---|
 | ![PCB front, model](pics/pcb_front_model.png) | ![PCB back, model](pics/pcb_back_model.png) |
-| ![PCB back, physical](pics/pcb_back_physical.jpg) | ![FPGA and PCB, physical](pics/fpga_and_pcb_front_physical.jpg) |
+
+![PCB back, physical](pics/pcb_back_physical.jpg)
 
 - 30x Knowles/CUI `SPH0641LU4H` PDM MEMS microphones on a Fermat-spiral array, laid out and placed programmatically via `PCB/script.py` (KiCad scripting console).
 - Sensor board connects to the Basys3 over the JA and JXADC Pmod headers (see `FPGA/acoustic_camera.srcs/constrs_1/new/acoustic_camera.xdc`).

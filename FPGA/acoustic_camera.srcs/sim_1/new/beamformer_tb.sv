@@ -22,13 +22,13 @@
 module beamformer_tb;
 
 localparam int MIC_COUNT = 30;
-localparam logic ZOOM = 1; // 1 = 60deg, 0 = 180deg
 
 
 logic clk, rst, input_ready;
 logic signed [17:0] R [MIC_COUNT-1:0];
 logic signed [17:0] I [MIC_COUNT-1:0];
 logic [4:0] gain = 5'd16;
+logic zoom = 1; // 1 = 60deg, 0 = 180deg
 
 logic [15:0] wr_data;
 logic [9:0]  wr_addr;
@@ -38,8 +38,7 @@ logic [15:0] rd_data;
 logic [9:0]  rd_addr;
 
 beamformer #(
-    .MIC_COUNT(MIC_COUNT),
-    .ZOOM(ZOOM)
+    .MIC_COUNT(MIC_COUNT)
 )
 dut (
     .clk(clk),
@@ -48,6 +47,7 @@ dut (
     .I(I),
     .input_ready(input_ready),
     .gain(gain),
+    .zoom(zoom),
     .wr_data(wr_data),
     .wr_addr(wr_addr),
     .frame_ready(frame_ready)

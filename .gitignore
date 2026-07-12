@@ -14,6 +14,7 @@ FPGA/vivado*.jou
 FPGA/vivado*.log
 FPGA/webtalk*.log
 FPGA/usage_statistics_webtalk.html
+FPGA/*.png
 **/xsim.dir/
 *.wdb
 *.pb
