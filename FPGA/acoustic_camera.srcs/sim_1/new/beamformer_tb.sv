@@ -32,7 +32,7 @@ logic zoom = 1; // 1 = 60deg, 0 = 180deg
 
 logic [15:0] wr_data;
 logic [9:0]  wr_addr;
-logic        frame_ready;
+logic        beamf_busy;
 
 logic [15:0] rd_data;
 logic [9:0]  rd_addr;
@@ -50,7 +50,7 @@ dut (
     .zoom(zoom),
     .wr_data(wr_data),
     .wr_addr(wr_addr),
-    .frame_ready(frame_ready)
+    .beamf_busy(beamf_busy)
 );
 
 framebuffer dut_fb (
@@ -60,8 +60,9 @@ framebuffer dut_fb (
     .wr_data(wr_data),
     .clk(clk),
     .rst(rst),
-    .frame_ready(frame_ready),
-    .UART_busy(1'b0)
+    .beamf_busy(beamf_busy),
+    .tx_busy(1'b0),
+    .swapped()
 );
 
 always #5 clk = ~clk;

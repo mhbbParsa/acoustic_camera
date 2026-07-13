@@ -21,14 +21,15 @@
 
 
 module framebuffer(
+    output logic        swapped,
     output logic [15:0] rd_data,
     input  logic [9:0]  rd_addr,
     input  logic [15:0] wr_data,
     input  logic [9:0]  wr_addr,
     input  logic clk,
     input  logic rst,
-    input  logic frame_ready,
-    input  logic UART_busy
+    input  logic beamf_busy,
+    input  logic tx_busy
 );
 
 (* ram_style = "block" *) logic [15:0] buffer1 [1023:0];
@@ -37,9 +38,8 @@ module framebuffer(
 logic select;
 logic [15:0] rd_data1, rd_data2;
 
-// each buffer gets its own dedicated, purely-synchronous read/write process
-// (no async reset, no cross-array muxing inside the process) so Vivado
-// infers a block RAM per buffer instead of falling back to flip-flops.
+logic not_already_swapped;
+
 always_ff @(posedge clk) begin
     if (select)
         buffer1[wr_addr] <= wr_data;
@@ -53,10 +53,21 @@ end
 assign rd_data = select ? rd_data2 : rd_data1;
 
 always_ff @(posedge clk or posedge rst) begin
-    if (rst)
+    if (rst) begin
         select <= 0;
-    else if (frame_ready && !UART_busy)
-        select <= !select;
+        not_already_swapped <= 0;
+    end
+    else begin
+        if (beamf_busy || tx_busy) 
+            not_already_swapped <= 1;
+        if (!beamf_busy && !tx_busy && not_already_swapped) begin
+            not_already_swapped <= 0;
+            select <= !select;
+            swapped <= 1;
+        end
+        else
+            swapped <= 0;
+    end
 end
 
 endmodule

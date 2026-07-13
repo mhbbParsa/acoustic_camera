@@ -24,20 +24,20 @@ module UART #(
     parameter int CLK_HZ = 100_000_000,
     parameter int BAUD   = 921_600
 )(
+    input  logic        swapped,
     input  logic        clk,
     input  logic        rst,
-    input  logic        frame_ready,
     input  logic [15:0] rd_data,
     output logic [9:0]  rd_addr,
     output logic        tx,
-    output logic        UART_busy
+    output logic        tx_busy
 );
     localparam int DIV = CLK_HZ / BAUD;
     logic [$clog2(DIV)-1:0] div;
     logic enable;
     assign enable = (div == DIV-1);
     always_ff @(posedge clk) begin
-        if (rst || enable || !UART_busy)
+        if (rst || enable || !tx_busy)
             div <= '0;
         else
             div <= div + 1;
@@ -53,7 +53,7 @@ module UART #(
     logic [9:0] pixel;
 
     assign rd_addr = pixel;
-    assign UART_busy = (state != IDLE);
+    assign tx_busy = (state != IDLE);
 
     logic [7:0] next_byte;
     assign next_byte = (hdr == 2) ? 8'hAA : (hdr == 1) ? 8'h55 : hi ? rd_data[15:8] : rd_data[7:0];
@@ -64,7 +64,7 @@ module UART #(
         end else case (state)
             IDLE: begin
                 tx <= 1'b1;
-                if (frame_ready) begin
+                if (swapped) begin
                     hdr <= 2;  hi <= 0;  pixel <= '0;
                     state  <= START;
                 end

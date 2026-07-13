@@ -114,12 +114,12 @@ From `FPGA/acoustic_camera.runs/impl_1/` (Vivado 2025.2, `xc7a35tcpg236-1`, full
 
 | Resource | Used | Available | Utilization |
 |---|---|---|---|
-| Slice LUTs | 7,441 | 20,800 | 35.8% |
-| Slice Registers | 11,510 | 41,600 | 27.7% |
-| Block RAM (RAMB18) | 2 | 100 | 2.0% |
+| Slice LUTs | 7,439 | 20,800 | 35.8% |
+| Slice Registers | 11,511 | 41,600 | 27.7% |
+| Block RAM (RAMB18) | 1 | 50 | 2.0% |
 | DSP48E1 | 20 | 90 | 22.2% |
 
-Timing closes at 100 MHz (the system clock constraint) with +0.313 ns worst negative slack — all user-specified constraints met.
+Timing closes at 100 MHz (the system clock constraint) with +0.179 ns worst negative slack — all user-specified constraints met.
 
 ## Simulation
 

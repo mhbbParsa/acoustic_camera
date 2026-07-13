@@ -21,6 +21,7 @@
 
 
 module vga_controller(
+    output logic       tx_busy,
     output logic [3:0] red,
     output logic [3:0] green,
     output logic [3:0] blue,
@@ -139,5 +140,8 @@ assign vsync = ~(v_cnt >= 490 && v_cnt < 492);
 assign display = (h_cnt > 79 && h_cnt < 560 && v_cnt < 480);
 
 assign rd_addr = image_pixel_ctr;
+
+//assign tx_busy = (vsync <= 480);
+assign tx_busy = 0;
 
 endmodule

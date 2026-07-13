@@ -58,7 +58,7 @@ logic signed [17:0] I [MIC_COUNT-1:0];
 logic goertzel_valid;
 logic audio_ready;
 logic frame_ready;
-logic UART_busy;
+logic tx_busy;
 
 logic [15:0] rd_data;
 logic [9:0]  rd_addr;
@@ -103,7 +103,7 @@ beamformer #(
 beamf (
     .wr_addr(wr_addr),
     .wr_data(wr_data),
-    .frame_ready(frame_ready),
+    .beamf_busy(beamf_busy),
     .clk(clk),
     .rst(rst),
     .R(R),
@@ -120,8 +120,9 @@ framebuffer framebuffer(
     .wr_data(wr_data),
     .clk(clk),
     .rst(rst),
-    .frame_ready(frame_ready),
-    .UART_busy(UART_busy)
+    .swapped(swapped),
+    .tx_busy(tx_busy),
+    .beamf_busy(beamf_busy)
 );
 
 UART #(
@@ -131,11 +132,11 @@ UART #(
 uart(
     .clk(clk),
     .rst(rst),
-    .frame_ready(frame_ready),
+    .swapped(swapped),
     .rd_data(rd_data),
     .rd_addr(rd_addr),
     .tx(tx),
-    .UART_busy(UART_busy)
+    .tx_busy(tx_busy)
 );
 
 /*
@@ -150,6 +151,7 @@ vga (
     .rst(rst),
     .rd_data(rd_data),
     .rd_addr(rd_addr),
+    .tx_busy(tx_busy),
 );
 */
 

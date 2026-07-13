@@ -26,7 +26,7 @@ module beamformer #(
 (
     output logic        [15:0] wr_data,
     output logic         [9:0] wr_addr,
-    output logic               frame_ready,
+    output logic               beamf_busy,
     input  logic               clk,
     input  logic               rst,
     input  logic signed [17:0] R [MIC_COUNT-1:0],
@@ -125,6 +125,8 @@ logic [34:0] power;
 
 enum logic [2:0] {IDLE, CALCULATING, WAITING1, WAITING2, WRITING1, WRITING2} state;
 
+assign beamf_busy = (state != IDLE);
+
 //scaled_radians (half turns)
 //in  = FIXED18_15
 //out = FIXED18_16
@@ -147,7 +149,6 @@ always_ff @(posedge clk or posedge rst) begin
         s_axis_phase_tvalid <= 0;
         pixel_buffer_R <= 0;
         pixel_buffer_I <= 0;
-        frame_ready <= 0;
     end
     else begin
         case(state)
@@ -162,7 +163,6 @@ always_ff @(posedge clk or posedge rst) begin
             end
             UX <= U*(X[0] >>> zoom); // must match the WAITING2 shift below, or mic 0's first term
             VY <= V*(Y[0] >>> zoom); // stays wrong for the rest of the frame whenever zoom=0
-            frame_ready <= 0;
         end
         WAITING1: begin
             if(s_axis_phase_tready) begin
@@ -222,7 +222,6 @@ always_ff @(posedge clk or posedge rst) begin
                     pixel_ctr <= 0;
                     state <= IDLE;
                     s_axis_phase_tvalid <= 0;
-                    frame_ready <= 1;
             end
             else begin
                     pixel_ctr <= pixel_ctr +1;
